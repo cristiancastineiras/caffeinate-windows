@@ -10,54 +10,65 @@ concurrency:
 
 permissions:
   contents: write
-  pull-requests: write
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  version-pr:
-    name: Crear PR de versión
+  release:
+    name: Compilar y publicar release
     runs-on: ubuntu-latest
-    outputs:
-      published: ${{ steps.changesets.outputs.hasChangesets == 'false' && steps.changesets.outputs.pullRequestNumber == '' }}
-      version: ${{ steps.get_version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-
-      - name: Instalar dependencias
-        run: npm ci
-
-      - name: Crear PR de versión o detectar publicación
-        id: changesets
-        uses: changesets/action@v1
-        with:
-          title: "chore: nueva versión"
-          commit: "chore: nueva versión"
-          version: npm run version
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Leer versión actual
-        id: get_version
-        run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
-
-      - name: Crear tag y release si se aplicó versión
-        if: steps.changesets.outputs.hasChangesets == 'false'
+      - name: Calcular próxima versión
+        id: version
         run: |
-          VERSION=$(node -p "require('./package.json').version")
-          TAG="v$VERSION"
-          if ! git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
-            git config user.name "github-actions[bot]"
-            git config user.email "github-actions[bot]@users.noreply.github.com"
-            git tag "$TAG"
-            git push origin "$TAG"
+          LATEST=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
+          if [ -z "$LATEST" ]; then
+            LATEST="v1.0.0"
+            NEW_TAG="v1.0.0"
+          else
+            VERSION=${LATEST#v}
+            MAJOR=$(echo $VERSION | cut -d. -f1)
+            MINOR=$(echo $VERSION | cut -d. -f2)
+            PATCH=$(echo $VERSION | cut -d. -f3)
+            NEW_TAG="v${MAJOR}.${MINOR}.$((PATCH + 1))"
           fi
+          echo "tag=$NEW_TAG" >> $GITHUB_OUTPUT
+          echo "version=${NEW_TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Instalar MinGW-w64
+        run: sudo apt-get update && sudo apt-get install -y mingw-w64
+
+      - name: Compilar caffeine.exe
+        run: make
+
+      - name: Crear tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.version.outputs.tag }}
+          git push origin ${{ steps.version.outputs.tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publicar GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: "Caffeine ${{ steps.version.outputs.tag }}"
+          files: build/win/caffeine.exe
+          generate_release_notes: true
+          body: |
+            ## Descarga
+            Bajá `caffeine.exe` y ejecutalo directamente — sin instalación.
+
+            **Uso rápido:**
+            - Doble click para iniciar
+            - Click derecho en el icono de la bandeja para ver las opciones
+            - Temporizadores: 30min, 1h, 2h, 4h, 8h o modo indefinido
+            - Mantiene el estado activo en Teams/Slack/etc
+
