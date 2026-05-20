@@ -12,50 +12,52 @@ permissions:
   contents: write
   pull-requests: write
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
-  release:
+  version-pr:
+    name: Crear PR de versión
     runs-on: ubuntu-latest
+    outputs:
+      published: ${{ steps.changesets.outputs.hasChangesets == 'false' && steps.changesets.outputs.pullRequestNumber == '' }}
+      version: ${{ steps.get_version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
-      - name: Install dependencies
+      - name: Instalar dependencias
         run: npm ci
 
-      - name: Create Release PR or Publish
+      - name: Crear PR de versión o detectar publicación
         id: changesets
         uses: changesets/action@v1
         with:
-          title: "chore: release"
-          commit: "chore: release"
+          title: "chore: nueva versión"
+          commit: "chore: nueva versión"
           version: npm run version
-          publish: npm run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build:
-    needs: release
-    if: needs.release.outputs.published == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install MinGW-w64
-        run: sudo apt-get update && sudo apt-get install -y mingw-w64
-
-      - name: Build
-        run: make
-
-      - name: Get version
-        id: version
+      - name: Leer versión actual
+        id: get_version
         run: echo "version=$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
 
-      - name: Upload binary to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: v${{ steps.version.outputs.version }}
-          files: build/win/caffeine.exe
-          generate_release_notes: true
+      - name: Crear tag y release si se aplicó versión
+        if: steps.changesets.outputs.hasChangesets == 'false'
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          TAG="v$VERSION"
+          if ! git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git tag "$TAG"
+            git push origin "$TAG"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
