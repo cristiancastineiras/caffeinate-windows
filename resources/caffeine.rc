@@ -1,0 +1,41 @@
+// caffeine.rc - Script de recursos de Windows
+// ===========================================
+// Define los recursos de la aplicación (icono, versión, etc.)
+// Compilado por windres y enlazado al ejecutable final
+
+#include <windows.h>
+#include "resource.h"
+
+// Icono de la aplicación
+IDI_ICON1 ICON "img/logo.ico"
+
+// Información de versión (aparece en Propiedades del .exe)
+VS_VERSION_INFO VERSIONINFO
+    FILEVERSION     1,0,0,0
+    PRODUCTVERSION  1,0,0,0
+    FILEFLAGSMASK   0x3fL
+    FILEFLAGS       0x0L
+    FILEOS          VOS__WINDOWS32
+    FILETYPE        VFT_APP
+    FILESUBTYPE     0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        // Español (España) 0x0c0a, Unicode (1200)
+        BLOCK "0c0a04b0"
+        BEGIN
+            VALUE "CompanyName",      "Software Libre"
+            VALUE "FileDescription",  "Caffeine - Mantén tu PC despierto y activo en Teams"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "caffeine"
+            VALUE "LegalCopyright",   "CC0-1.0 Dominio Público"
+            VALUE "OriginalFilename", "caffeine.exe"
+            VALUE "ProductName",      "Caffeine para Windows"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0c0a, 1200
+    END
+END
